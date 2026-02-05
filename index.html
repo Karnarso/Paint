@@ -1,333 +1,610 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Calculator, 
-  BarChart3, 
-  ShieldCheck,
-  Lock,
-  TrendingUp,
-  LayoutDashboard,
-  Settings2,
-  Grid
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Málningavörur ehf. LBO Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* RESET & BASE STYLES */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: #020617; 
+            color: #f8fafc; 
+            font-family: 'Inter', sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            overflow: hidden; 
+        }
 
-const App = () => {
-  // --- Constants (Defined inside to avoid scope issues) ---
-  const ENTRY_MULTIPLE = 6.0;
-  const BASE_EBITDA = 50.0;
-  const ENTRY_PRICE = BASE_EBITDA * ENTRY_MULTIPLE; // 300.0M
-  const ENTRY_DEBT = 200.0;
-  const ENTRY_EQUITY = ENTRY_PRICE - ENTRY_DEBT; // 100.0M
-  const INTEREST_RATE = 0.13;
-  const TAX_RATE = 0.21;
-  const WACC = 0.12;
-  const TERM = 5;
-  const MIN_CASH = 20.0;
+        /* SLIDE CONTAINER */
+        .slide-container {
+            width: 1280px;
+            height: 720px;
+            background-color: #020617;
+            background-image: 
+                linear-gradient(to bottom, rgba(2, 6, 23, 0.95), rgba(2, 6, 23, 0.98)),
+                url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop');
+            background-size: cover;
+            position: relative;
+            padding: 30px 40px; 
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 20px; 
+            border: 1px solid #1e293b;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
 
-  // --- Interactive States ---
-  const [targetMultiple, setTargetMultiple] = useState(6.0);
-  const [yearlyGrowth, setYearlyGrowth] = useState(5.0); // %
-  const [ebitdaMargin, setEbitdaMargin] = useState(8.0); // %
+        /* 1. HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px; 
+        }
+        .header-left h1 {
+            font-size: 32px; 
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .header-left .subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-right {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+        .header-right .highlight {
+            color: #fff;
+            font-weight: 700;
+        }
 
-  // --- Dynamic Forecast Calculation: 2026 - 2030 ---
-  const forecastData = useMemo(() => {
-    const results = [];
-    let startRev = 683.6; // Base 2026 Revenue
-    let currentDebt = ENTRY_DEBT;
-    let cashReserve = 0; 
-    const growthDecimal = yearlyGrowth / 100;
-    const marginDecimal = ebitdaMargin / 100; 
+        /* 2. KPI CARDS */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+        .kpi-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid #334155;
+            padding: 15px; 
+            border-radius: 12px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+        .kpi-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-bottom: 5px;
+        }
+        .kpi-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 36px; 
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+        .kpi-sub {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+
+        /* 3. MAIN CONTENT */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1.4fr 0.9fr; 
+            gap: 20px;
+            height: 100%;
+            min-height: 0; 
+            overflow: hidden;
+        }
+
+        /* PANEL STYLES */
+        .panel {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; 
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #334155;
+            color: #94a3b8;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        /* TABLE STYLES */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; 
+        }
+        th {
+            text-align: right;
+            padding: 6px 8px;
+            color: #64748b;
+            font-size: 10px;
+            border-bottom: 1px solid #334155;
+        }
+        th:first-child { text-align: left; }
+        td {
+            padding: 6px 8px;
+            text-align: right;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+            color: #e2e8f0;
+        }
+        td:first-child { text-align: left; color: #94a3b8; font-weight: 600; }
+        .row-highlight { background: rgba(59, 130, 246, 0.1); color: #fff; font-weight: 700; }
+        .row-highlight td:first-child { color: #60a5fa; }
+        .text-red { color: #f87171; }
+        .text-green { color: #4ade80; }
+        .text-blue { color: #60a5fa; }
+
+        /* RIGHT COL: SLIDERS & MATRIX */
+        .right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+        }
+
+        /* SLIDER CONTROLS */
+        .control-group {
+            margin-bottom: 12px;
+        }
+        .control-group:last-child { margin-bottom: 0; }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+        .control-val {
+            color: #60a5fa;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        input[type=range] {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: #60a5fa;
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        /* SENSITIVITY MATRIX */
+        .sensitivity-table {
+            height: 100%;
+        }
+        .sensitivity-table td, .sensitivity-table th {
+            padding: 4px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .sensitivity-cell {
+            background-color: rgba(15, 23, 42, 0.6);
+            border-radius: 6px;
+            padding: 6px 0;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+        .sensitivity-cell.active {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            transform: scale(1.02);
+        }
+
+        .icon-box {
+            width: 24px;
+            height: 24px;
+            background: rgba(96, 165, 250, 0.1);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+
+<div class="slide-container">
     
-    // Fixed assumptions
-    const gpMargin = 0.40; 
-    const deprMargin = 6.8 / 683.6;
-
-    for (let i = 0; i < TERM; i++) {
-      const year = 2026 + i;
-      const rev = i === 0 ? startRev : startRev * Math.pow(1 + growthDecimal, i);
-      
-      const gp = rev * gpMargin;
-      const ebitda = rev * marginDecimal;
-      const depr = rev * deprMargin;
-      const ebit = ebitda - depr;
-      
-      // Interest Logic: Holiday (0%) for first 2 years, 13% after
-      const interestExpense = year < 2028 ? 0 : currentDebt * INTEREST_RATE;
-      
-      const ebt = ebit - interestExpense;
-      const taxes = Math.max(0, ebt * TAX_RATE);
-      const netIncome = ebt - taxes;
-      
-      let debtRepayment = 0;
-
-      if (year >= 2028) {
-        // Cash Sweep Phase (Years 3-5)
-        const totalAvailableCash = netIncome + cashReserve;
-        // Release buffer only in final year (2030)
-        const effectiveBuffer = (year === 2030) ? 0 : MIN_CASH;
-        
-        const maxRepaymentPossible = Math.max(0, totalAvailableCash - effectiveBuffer);
-        const actualPrincipalPaid = Math.min(currentDebt, maxRepaymentPossible);
-        
-        debtRepayment = actualPrincipalPaid;
-        currentDebt -= actualPrincipalPaid;
-        cashReserve = totalAvailableCash - actualPrincipalPaid;
-      } else {
-        // Grace Period (Years 1-2): Accumulate cash
-        debtRepayment = 0;
-        cashReserve += netIncome;
-      }
-
-      results.push({
-        year: year.toString(),
-        revenue: rev,
-        gp: gp,
-        ebitda: ebitda,
-        depr: depr,
-        ebit: ebit,
-        interest: interestExpense,
-        taxes: taxes,
-        netIncome: netIncome,
-        principal: debtRepayment,
-        debtBalance: currentDebt,
-        excessCash: year < 2028 ? netIncome : (netIncome - debtRepayment),
-        cashBalance: cashReserve,
-        discountFactor: Math.pow(1 + WACC, -(i + 1))
-      });
-    }
-    return results;
-  }, [yearlyGrowth, ebitdaMargin, ENTRY_DEBT, INTEREST_RATE, TAX_RATE, WACC, TERM, MIN_CASH]);
-
-  const finalCash = forecastData.length > 0 ? forecastData[forecastData.length - 1].cashBalance : 0;
-  const finalDebt = forecastData.length > 0 ? forecastData[forecastData.length - 1].debtBalance : 0;
-  const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
-
-  // Calculation Helper
-  const getReturns = (ebitdaVal, multipleVal) => {
-    const exitEV = ebitdaVal * multipleVal;
-    const exitProceeds = exitEV - finalDebt + finalCash;
-    
-    let irr = 0;
-    if (exitProceeds > 0) {
-      irr = (Math.pow(exitProceeds / ENTRY_EQUITY, 1/TERM) - 1) * 100;
-    } else {
-      irr = -100; 
-    }
-    
-    return { irr, exitProceeds };
-  };
-
-  // Base Returns
-  const baseReturns = getReturns(exitYearEbitda, targetMultiple);
-
-  // Sensitivity Data
-  const multiples = [targetMultiple - 1, targetMultiple, targetMultiple + 1];
-  const ebitdaVariations = [
-    { label: 'Downside', value: exitYearEbitda * 0.95 },
-    { label: 'Selected Case', value: exitYearEbitda },
-    { label: 'Upside', value: exitYearEbitda * 1.05 }
-  ];
-
-  // Formatter
-  const f = (val) => val ? val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0.0';
-
-  return (
-    <div className="min-h-screen bg-[#020617] p-4 lg:p-10 font-sans text-slate-100">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8 border-b border-slate-700 pb-6 flex flex-col md:flex-row justify-between items-end gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="w-5 h-5 text-blue-400" />
-            <span className="text-sm font-black uppercase tracking-[0.3em] text-blue-400">Investment Memo</span>
-          </div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-50">Málningavörur ehf.</h1>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">LBO Return Analysis / Liquidity Buffer Model</p>
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-left">
+            <div class="subtitle">
+                <i class="fa-solid fa-shield-halved text-blue"></i> Investment Memorandum
+            </div>
+            <h1>Málningavörur ehf.</h1>
+            <div style="font-size: 14px; color: #64748b;">Interactive LBO Model (Cash Sweep)</div>
         </div>
-        <div className="text-right font-mono text-sm space-y-1 text-slate-400">
-          <p>Purchase Price: <span className="text-white font-bold">{ENTRY_PRICE.toFixed(1)}M ISK</span></p>
-          <p>Equity: <span className="text-white font-bold">{ENTRY_EQUITY.toFixed(1)}M ISK</span></p>
-          <p>Acquisition Debt: <span className="text-white font-bold">{ENTRY_DEBT.toFixed(1)}M ISK</span></p>
+        <div class="header-right">
+            <div>Purchase Price: <span class="highlight">300.0M ISK</span></div>
+            <div>Equity / Debt: <span class="highlight">100M / 200M</span></div>
+            <div style="color: #60a5fa; margin-top:4px;">Strategy: 2-Year Holiday + Full Sweep</div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto">
-        {/* Top KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
-          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg">
-            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Entry Multiple</p>
-            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{ENTRY_MULTIPLE.toFixed(1)}x</h2>
-          </div>
-          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg ring-1 ring-blue-500/30">
-            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Projected IRR</p>
-            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{baseReturns.irr.toFixed(1)}%</h2>
-          </div>
-          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg">
-            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Exit Proceeds</p>
-            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{f(baseReturns.exitProceeds)}M</h2>
-          </div>
-        </div>
-
-        {/* Side-by-Side Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          
-          {/* Condensed P&L Statement */}
-          <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
-            <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
-              <BarChart3 className="w-5 h-5 text-slate-400" />
-              <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">P&L and Liquidity Tracker</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left border-collapse font-mono">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="py-3 font-black text-slate-400 uppercase text-xs">Period</th>
-                    {forecastData.map(d => (
-                      <th key={d.year} className="px-2 py-3 font-black text-white text-right">{d.year}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  <tr className="text-white hover:bg-slate-800/20">
-                    <td className="py-3 font-bold">Revenue</td>
-                    {forecastData.map(d => <td key={d.year} className="px-2 text-right">{f(d.revenue)}</td>)}
-                  </tr>
-                  <tr className="font-bold bg-slate-800/40">
-                    <td className="py-3 text-blue-300">EBITDA</td>
-                    {forecastData.map(d => <td key={d.year} className="px-2 text-right">{f(d.ebitda)}</td>)}
-                  </tr>
-                  <tr className="text-red-400/90 italic hover:bg-slate-800/20">
-                    <td className="py-3 pl-4">Interest</td>
-                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right">{d.interest > 0 ? `(${f(d.interest)})` : '-'}</td>)}
-                  </tr>
-                  <tr className="border-t border-slate-700 font-bold bg-slate-800/50">
-                    <td className="py-3">Net Income</td>
-                    {forecastData.map(d => <td key={d.year} className="px-2 text-right text-white">{f(d.netIncome)}</td>)}
-                  </tr>
-                  <tr className="text-indigo-400 hover:bg-slate-800/20">
-                    <td className="py-3 pl-4 font-bold italic">Debt Repayment</td>
-                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right font-bold">{d.principal > 0 ? `(${f(d.principal)})` : '-'}</td>)}
-                  </tr>
-                  <tr className="border-y border-blue-500/30 bg-blue-500/10 font-black">
-                    <td className="py-3 text-blue-400 flex items-center gap-2">
-                      End Cash Balance {forecastData.some(d => d.year !== '2030' && Math.abs(d.cashBalance - MIN_CASH) < 0.1) && <Lock className="w-3 h-3 text-blue-400" />}
-                    </td>
-                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right text-blue-300">{f(d.cashBalance)}</td>)}
-                  </tr>
-                  <tr className="text-slate-400 text-xs italic hover:bg-slate-800/20">
-                    <td className="py-3 pl-4">Discount Factor</td>
-                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right">{d.discountFactor.toFixed(4)}</td>)}
-                  </tr>
-                  <tr className="text-xs text-slate-500">
-                    <td className="py-3 uppercase font-bold">Debt Balance</td>
-                    {forecastData.map(d => <td key={d.year} className="px-2 text-right font-bold text-slate-300">{f(d.debtBalance)}</td>)}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 p-3 border border-blue-900/30 bg-blue-900/10 rounded flex items-center gap-3">
-              <div className="p-1.5 bg-blue-500/20 rounded-full"><Calculator className="w-3 h-3 text-blue-400" /></div>
-              <p className="text-[10px] text-slate-400 leading-tight">
-                A minimum <span className="text-white font-bold">{MIN_CASH}M ISK</span> operating cash buffer is maintained through 2029. 
-                Full sweep is executed in 2030 to maximize final debt retirement.
-              </p>
-            </div>
-          </div>
-
-          {/* Analytics Column */}
-          <div className="space-y-6">
-            
-            {/* Controls */}
-            <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-6">
-                <LayoutDashboard className="w-5 h-5 text-blue-400" />
-                <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">Dynamic Controls</h3>
-              </div>
-              <div className="space-y-8">
-                {/* Revenue Growth */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Revenue Growth Rate</label>
-                    <span className="text-sm font-mono font-bold text-blue-400">{yearlyGrowth.toFixed(1)}%</span>
-                  </div>
-                  <input 
-                    type="range" min="0" max="15" step="0.5" 
-                    value={yearlyGrowth} 
-                    onChange={(e) => setYearlyGrowth(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                </div>
-
-                {/* EBITDA Margin */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">EBITDA Margin %</label>
-                    <span className="text-sm font-mono font-bold text-blue-400">{ebitdaMargin.toFixed(1)}%</span>
-                  </div>
-                  <input 
-                    type="range" min="0" max="20" step="0.5" 
-                    value={ebitdaMargin} 
-                    onChange={(e) => setEbitdaMargin(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                </div>
-
-                {/* Exit Multiple */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Exit Multiple (2030)</label>
-                    <span className="text-sm font-mono font-bold text-blue-400">{targetMultiple.toFixed(1)}x</span>
-                  </div>
-                  <input 
-                    type="range" min="3" max="9" step="0.1" 
-                    value={targetMultiple} 
-                    onChange={(e) => setTargetMultiple(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sensitivity Matrix */}
-            <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
-                <TrendingUp className="w-5 h-5 text-slate-400" />
-                <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">IRR & Proceeds Sensitivity</h3>
-              </div>
-              <div className="border border-slate-700 rounded overflow-hidden">
-                <table className="w-full text-center font-mono text-base">
-                  <thead>
-                    <tr className="bg-slate-700/50 border-b border-slate-700 text-xs">
-                      <th className="p-5 border-r border-slate-700 font-black text-slate-500 uppercase text-left">EBITDA Case</th>
-                      {multiples.map(m => <th key={m} className="p-5 font-black text-white">{m.toFixed(1)}x</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {ebitdaVariations.map((variant, idx) => (
-                      <tr key={idx}>
-                        <td className="p-5 border-r border-slate-700 bg-slate-800/40 text-left">
-                          <div className="font-black text-slate-300 uppercase text-xs">{variant.label}</div>
-                        </td>
-                        {multiples.map(m => {
-                          const res = getReturns(variant.value, m);
-                          const isSelected = m === targetMultiple && variant.label === 'Selected Case';
-                          return (
-                            <td key={m} className={`p-5 transition-all ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-                              <div className="font-black text-lg">{res.irr.toFixed(1)}%</div>
-                              <div className="text-[10px] opacity-90 font-bold mt-1.5">{f(res.exitProceeds)} ISK</div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
     </div>
-  );
-};
 
-export default App;
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Entry Multiple</div>
+            <div class="kpi-value">6.0x</div>
+            <div class="kpi-sub">Based on 2025 EBITDA (50M)</div>
+        </div>
+        <div class="kpi-card" style="border-color: #3b82f6; background: rgba(59, 130, 246, 0.05);">
+            <div class="kpi-label">Projected IRR</div>
+            <div class="kpi-value" style="color: #60a5fa;" id="kpi-irr">28.4%</div>
+            <div class="kpi-sub">5-Year Hold Period</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Exit Proceeds</div>
+            <div class="kpi-value" id="kpi-proceeds">349.2M</div>
+            <div class="kpi-sub">ISK (Net of Debt)</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        
+        <!-- LEFT: DYNAMIC TABLE -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="icon-box"><i class="fa-solid fa-chart-line"></i></div>
+                5-Year Financial Forecast & Debt Schedule
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Metric (ISK m)</th>
+                        <th>2026</th>
+                        <th>2027</th>
+                        <th>2028</th>
+                        <th>2029</th>
+                        <th>2030</th>
+                    </tr>
+                </thead>
+                <tbody id="forecast-body">
+                    <!-- Javascript will populate this -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- RIGHT: CONTROLS & MATRIX -->
+        <div class="right-col">
+            
+            <!-- CONTROLS -->
+            <div class="panel" style="flex: 0 0 auto;">
+                <div class="panel-header">
+                    <div class="icon-box"><i class="fa-solid fa-sliders"></i></div>
+                    Deal Assumptions
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Revenue Growth</span>
+                        <span class="control-val" id="val-growth">5.0%</span>
+                    </div>
+                    <input type="range" id="input-growth" min="0" max="15" step="0.5" value="5.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>EBITDA Margin</span>
+                        <span class="control-val" id="val-margin">8.0%</span>
+                    </div>
+                    <input type="range" id="input-margin" min="5" max="20" step="0.5" value="8.0">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Exit Multiple (2030)</span>
+                        <span class="control-val" id="val-multiple">6.0x</span>
+                    </div>
+                    <input type="range" id="input-multiple" min="4" max="10" step="0.5" value="6.0">
+                </div>
+            </div>
+
+            <!-- SENSITIVITY -->
+            <div class="panel" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="panel-header">
+                    <div class="icon-box"><i class="fa-solid fa-table-cells"></i></div>
+                    IRR Sensitivity Matrix
+                </div>
+                <div style="flex: 1; display: flex; align-items: center;">
+                    <table class="sensitivity-table">
+                        <thead>
+                            <tr>
+                                <th style="font-size: 9px; color:#64748b; line-height:1.1;">EXIT<br>MULTIPLE</th>
+                                <th style="color: #fff;" id="matrix-head-low">5.0x</th>
+                                <th style="color: #60a5fa;" id="matrix-head-mid">6.0x</th>
+                                <th style="color: #fff;" id="matrix-head-high">7.0x</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrix-body">
+                            <!-- JS populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- CONSTANTS ---
+    const ENTRY_EQUITY = 100.0;
+    const ENTRY_DEBT = 200.0;
+    const INTEREST_RATE = 0.13;
+    const TAX_RATE = 0.21;
+    const MIN_CASH = 20.0;
+    const BASE_REVENUE_2026 = 683.6; // Starting base
+
+    // --- DOM ELEMENTS ---
+    const inputGrowth = document.getElementById('input-growth');
+    const inputMargin = document.getElementById('input-margin');
+    const inputMultiple = document.getElementById('input-multiple');
+    
+    const displayGrowth = document.getElementById('val-growth');
+    const displayMargin = document.getElementById('val-margin');
+    const displayMultiple = document.getElementById('val-multiple');
+
+    const kpiIrr = document.getElementById('kpi-irr');
+    const kpiProceeds = document.getElementById('kpi-proceeds');
+    const tableBody = document.getElementById('forecast-body');
+    const matrixBody = document.getElementById('matrix-body');
+
+    // --- MAIN CALCULATION ---
+    function calculateForecast(growthPct, marginPct) {
+        let results = [];
+        let currentRev = BASE_REVENUE_2026; 
+        let currentDebt = ENTRY_DEBT;
+        let cashReserve = 0; 
+        
+        // Loop 5 years: 2026, 2027, 2028, 2029, 2030
+        for (let i = 0; i < 5; i++) {
+            const year = 2026 + i;
+            
+            // Revenue Growth logic
+            // Base revenue 683.6 is 2026 Projection.
+            if (i > 0) {
+                currentRev = currentRev * (1 + growthPct/100);
+            }
+
+            const ebitda = currentRev * (marginPct/100);
+            const depr = currentRev * 0.01; 
+            const ebit = ebitda - depr;
+
+            // Interest Holiday: Years 1 & 2 (2026, 2027) = 0 interest
+            // Years 3+ (2028+) = 13%
+            const interest = (year < 2028) ? 0 : currentDebt * INTEREST_RATE;
+            
+            const ebt = ebit - interest;
+            const tax = Math.max(0, ebt * TAX_RATE);
+            const netIncome = ebt - tax;
+
+            let debtPaydown = 0;
+
+            if (year >= 2028) {
+                // Cash Sweep
+                const availableCash = netIncome + cashReserve;
+                const buffer = (year === 2030) ? 0 : MIN_CASH;
+                const maxPay = Math.max(0, availableCash - buffer);
+                
+                // Pay as much debt as possible
+                debtPaydown = Math.min(currentDebt, maxPay);
+                
+                currentDebt -= debtPaydown;
+                cashReserve = availableCash - debtPaydown;
+            } else {
+                // Grace Period
+                debtPaydown = 0;
+                cashReserve += netIncome;
+            }
+
+            results.push({
+                year,
+                revenue: currentRev,
+                ebitda: ebitda,
+                interest: interest,
+                netIncome: netIncome,
+                debtPaydown: debtPaydown,
+                cash: cashReserve,
+                debt: currentDebt
+            });
+        }
+        return results;
+    }
+
+    function calculateReturns(forecast, multiple) {
+        // Use forecast end state
+        const exitEbitda = forecast[4].ebitda;
+        const exitDebt = forecast[4].debt;
+        const exitCash = forecast[4].cash;
+        
+        return calculateReturnsForValues(exitEbitda, exitDebt, exitCash, multiple);
+    }
+
+    function calculateReturnsForValues(exitEbitda, exitDebt, exitCash, multiple) {
+        const enterpriseValue = exitEbitda * multiple;
+        const equityValue = enterpriseValue - exitDebt + exitCash;
+        
+        // IRR Formula: (Exit / Entry)^(1/5) - 1
+        let irr = 0;
+        if (equityValue > 0) {
+            irr = (Math.pow(equityValue / ENTRY_EQUITY, 1/5) - 1) * 100;
+        } else {
+            irr = -100;
+        }
+
+        return { irr, equityValue, exitEbitda };
+    }
+
+    // --- RENDER ---
+    function updateDashboard() {
+        const growth = parseFloat(inputGrowth.value);
+        const margin = parseFloat(inputMargin.value);
+        const multiple = parseFloat(inputMultiple.value);
+
+        // Update Labels
+        displayGrowth.innerText = growth.toFixed(1) + "%";
+        displayMargin.innerText = margin.toFixed(1) + "%";
+        displayMultiple.innerText = multiple.toFixed(1) + "x";
+
+        // Run Logic
+        const forecast = calculateForecast(growth, margin);
+        const returns = calculateReturns(forecast, multiple);
+
+        // Update KPIs
+        kpiIrr.innerText = returns.irr.toFixed(1) + "%";
+        kpiProceeds.innerText = returns.equityValue.toFixed(1) + "M";
+
+        // Update Forecast Table
+        let html = "";
+        const metrics = [
+            { label: "Revenue", key: "revenue", fmt: v => v.toFixed(1) },
+            { label: "EBITDA", key: "ebitda", fmt: v => v.toFixed(1), highlight: true },
+            { label: "Interest (13%)", key: "interest", fmt: v => v > 0 ? `(${v.toFixed(1)})` : "-", color: "text-red" },
+            { label: "Net Income", key: "netIncome", fmt: v => v.toFixed(1), border: true },
+            { label: "Debt Paydown", key: "debtPaydown", fmt: v => v > 0 ? `(${v.toFixed(1)})` : "-", color: "text-blue" },
+            { label: "Ending Cash", key: "cash", fmt: v => v.toFixed(1), highlight: true },
+            { label: "Debt Balance", key: "debt", fmt: v => v.toFixed(1), last: true, color: v => v < 1 ? "text-green" : "" }
+        ];
+
+        metrics.forEach(m => {
+            let rowClass = m.highlight ? 'class="row-highlight"' : '';
+            let style = m.border ? 'style="border-bottom: 2px solid #334155;"' : '';
+            if (m.last) style = 'style="font-size: 11px; border-bottom: none; text-transform: uppercase;"';
+            
+            html += `<tr ${rowClass} ${style}><td>${m.label}</td>`;
+            forecast.forEach(y => {
+                let val = y[m.key];
+                let display = m.fmt(val);
+                let colorClass = typeof m.color === 'function' ? m.color(val) : (m.color || '');
+                // Special color logic for debt zero
+                html += `<td class="${colorClass}">${display}</td>`;
+            });
+            html += "</tr>";
+        });
+        tableBody.innerHTML = html;
+
+        // Update Sensitivity Matrix
+        // Columns: Multiples
+        const mLow = multiple - 1;
+        const mMid = multiple;
+        const mHigh = multiple + 1;
+
+        document.getElementById('matrix-head-low').innerText = mLow.toFixed(1) + "x";
+        document.getElementById('matrix-head-mid').innerText = mMid.toFixed(1) + "x";
+        document.getElementById('matrix-head-high').innerText = mHigh.toFixed(1) + "x";
+
+        // Rows: EBITDA Scenarios (Downside, Base, Upside)
+        // We need the EBITDA for the final year to vary
+        const baseEbitda = forecast[4].ebitda;
+        const exitDebt = forecast[4].debt;
+        const exitCash = forecast[4].cash;
+
+        const scenarios = [
+            { label: "Downside", ebitda: baseEbitda * 0.95 },
+            { label: "Base Case", ebitda: baseEbitda },
+            { label: "Upside", ebitda: baseEbitda * 1.05 }
+        ];
+        
+        let matrixHtml = "";
+        
+        scenarios.forEach((row, idx) => {
+            // Is this the "Base Case" row?
+            const isBaseRow = idx === 1; 
+            
+            matrixHtml += `<tr><td style="font-size: 10px; text-align: left; color:#94a3b8; font-weight:600;">${row.label}</td>`;
+            
+            [mLow, mMid, mHigh].forEach((mult, cIdx) => {
+                const res = calculateReturnsForValues(row.ebitda, exitDebt, exitCash, mult);
+                // Highlight the center cell of the base row
+                const activeClass = (isBaseRow && cIdx === 1) ? "active" : "";
+                const subColor = (isBaseRow && cIdx === 1) ? "color:#bfdbfe;" : "color:#94a3b8;";
+                
+                matrixHtml += `
+                    <td>
+                        <div class="sensitivity-cell ${activeClass}">
+                            <div style="font-weight:700;">${res.irr.toFixed(1)}%</div>
+                            <div style="font-size:9px; ${subColor}">${res.equityValue.toFixed(0)}M</div>
+                        </div>
+                    </td>
+                `;
+            });
+            matrixHtml += "</tr>";
+        });
+        
+        matrixBody.innerHTML = matrixHtml;
+    }
+
+    // --- LISTENERS ---
+    inputGrowth.addEventListener('input', updateDashboard);
+    inputMargin.addEventListener('input', updateDashboard);
+    inputMultiple.addEventListener('input', updateDashboard);
+
+    // Init
+    updateDashboard();
+
+</script>
+
+</body>
+</html>
