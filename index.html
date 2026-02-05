@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Calculator, 
   Grid, 
@@ -25,7 +25,7 @@ const App = () => {
   const taxRate = 0.21;
   const wacc = 0.12; 
   const term = 5;
-  const minOperatingCash = 20.0; // Minimum cash buffer to keep in the company
+  const minOperatingCash = 20.0; // Minimum cash buffer
 
   // --- Dynamic Forecast Calculation: 2026 - 2030 ---
   const forecastData = useMemo(() => {
@@ -62,28 +62,16 @@ const App = () => {
 
       if (year >= 2028) {
         // --- Cash Sweep Phase (Years 3-5) ---
-        // Available cash = Current Net Income + Accumulated Cash from previous years
         const totalAvailableCash = netIncome + cashReserve;
-        
-        // Liquidity Buffer Logic:
-        // In 2030 (Exit Year), we release the buffer to pay down max debt.
-        // In 2028-2029, we must keep 'minOperatingCash' on the balance sheet.
         const effectiveBuffer = (year === 2030) ? 0 : minOperatingCash;
-        
-        // Calculate max possible repayment while preserving buffer
         const maxRepaymentPossible = Math.max(0, totalAvailableCash - effectiveBuffer);
-        
-        // Don't pay more than the debt we owe
         const actualPrincipalPaid = Math.min(currentDebt, maxRepaymentPossible);
         
         debtRepayment = actualPrincipalPaid;
         currentDebt -= actualPrincipalPaid;
-        
-        // Update cash reserve: Whatever is left after paying debt
         cashReserve = totalAvailableCash - actualPrincipalPaid;
       } else {
         // --- Grace Period Phase (Years 1-2) ---
-        // No payments. All Net Income is added to Cash Reserve.
         debtRepayment = 0;
         cashReserve += netIncome;
       }
@@ -100,7 +88,7 @@ const App = () => {
         netIncome: netIncome,
         principal: debtRepayment,
         debtBalance: currentDebt,
-        excessCash: year < 2028 ? netIncome : (netIncome - debtRepayment), // Flow for that specific year
+        excessCash: year < 2028 ? netIncome : (netIncome - debtRepayment),
         cashBalance: cashReserve,
         discountFactor: Math.pow(1 + wacc, -(i + 1))
       });
@@ -108,35 +96,31 @@ const App = () => {
     return results;
   }, [entryDebt, interestRate, yearlyGrowth, ebitdaMargin, minOperatingCash, term, taxRate, wacc]);
 
-  const finalCash = useMemo(() => {
-    if (forecastData.length === 0) return 0;
-    return forecastData[forecastData.length - 1].cashBalance;
-  }, [forecastData]);
+  const finalCash = forecastData.length > 0 ? forecastData[forecastData.length - 1].cashBalance : 0;
+  const finalDebt = forecastData.length > 0 ? forecastData[forecastData.length - 1].debtBalance : 0;
+  const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
 
-  // Wrapped in useCallback to prevent dependency issues
-  const calculateReturns = useCallback((ebitda, multiple) => {
-    if (forecastData.length === 0) return { irr: 0, moic: 0, exitProceeds: 0 };
-    
-    const exitEV = ebitda * multiple;
-    const finalDebt = forecastData[forecastData.length - 1].debtBalance;
+  // Helper to calculate returns for any scenario
+  const getReturns = (ebitdaVal, multipleVal) => {
+    const exitEV = ebitdaVal * multipleVal;
     const exitProceeds = exitEV - finalDebt + finalCash;
     
-    // IRR over the term (5 years)
-    const irr = (Math.pow(exitProceeds / entryEquity, 1/term) - 1) * 100;
-    const moic = exitProceeds / entryEquity;
+    // Safety check for negative proceeds to prevent NaN
+    let irr = 0;
+    if (exitProceeds > 0) {
+      irr = (Math.pow(exitProceeds / entryEquity, 1/term) - 1) * 100;
+    } else {
+      irr = -100; // Total loss
+    }
     
+    const moic = exitProceeds / entryEquity;
     return { irr, moic, exitProceeds };
-  }, [forecastData, finalCash, entryEquity, term]);
+  };
 
-  const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
-  
-  // Calculate base case returns for top cards
-  const baseReturns = useMemo(() => 
-    calculateReturns(exitYearEbitda, targetMultiple), 
-    [exitYearEbitda, targetMultiple, calculateReturns]
-  );
+  // Base Case for Top Cards
+  const baseReturns = getReturns(exitYearEbitda, targetMultiple);
 
-  // Data for Sensitivity Matrix
+  // Sensitivity Data
   const multiples = [targetMultiple - 1, targetMultiple, targetMultiple + 1];
   const ebitdaVariations = [
     { label: 'Downside', value: exitYearEbitda * 0.95 },
@@ -144,7 +128,7 @@ const App = () => {
     { label: 'Upside', value: exitYearEbitda * 1.05 }
   ];
 
-  const f = (val) => val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const f = (val) => val ? val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0.0';
 
   return (
     <div className="min-h-screen bg-[#020617] p-4 lg:p-10 font-sans text-slate-100">
@@ -268,7 +252,7 @@ const App = () => {
                   />
                 </div>
 
-                {/* EBITDA Margin - Added back to ensure setEbitdaMargin is used */}
+                {/* EBITDA Margin */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">EBITDA Margin %</label>
@@ -319,7 +303,7 @@ const App = () => {
                           <div className="font-black text-slate-300 uppercase text-xs">{variant.label}</div>
                         </td>
                         {multiples.map(m => {
-                          const res = calculateReturns(variant.value, m);
+                          const res = getReturns(variant.value, m);
                           const isSelected = m === targetMultiple && variant.label === 'Selected Case';
                           return (
                             <td key={m} className={`p-5 transition-all ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
