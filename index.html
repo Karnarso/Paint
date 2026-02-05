@@ -1,26 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Calculator, 
-  Grid, 
   BarChart3, 
   ShieldCheck,
-  Settings2,
-  Lock
+  Lock,
+  TrendingUp,
+  LayoutDashboard
 } from 'lucide-react';
 
-// Move static constants outside to prevent re-creation on render
-const ENTRY_MULTIPLE = 6.0;
-const BASE_EBITDA = 50.0;
-const ENTRY_PRICE = BASE_EBITDA * ENTRY_MULTIPLE; // 300.0M
-const ENTRY_DEBT = 200.0;
-const ENTRY_EQUITY = ENTRY_PRICE - ENTRY_DEBT; // 100.0M
-const INTEREST_RATE = 0.13;
-const TAX_RATE = 0.21;
-const WACC = 0.12;
-const TERM = 5;
-const MIN_CASH = 20.0;
-
 const App = () => {
+  // --- Constants (Defined inside to avoid scope issues) ---
+  const ENTRY_MULTIPLE = 6.0;
+  const BASE_EBITDA = 50.0;
+  const ENTRY_PRICE = BASE_EBITDA * ENTRY_MULTIPLE; // 300.0M
+  const ENTRY_DEBT = 200.0;
+  const ENTRY_EQUITY = ENTRY_PRICE - ENTRY_DEBT; // 100.0M
+  const INTEREST_RATE = 0.13;
+  const TAX_RATE = 0.21;
+  const WACC = 0.12;
+  const TERM = 5;
+  const MIN_CASH = 20.0;
+
   // --- Interactive States ---
   const [targetMultiple, setTargetMultiple] = useState(6.0);
   const [yearlyGrowth, setYearlyGrowth] = useState(5.0); // %
@@ -93,7 +93,7 @@ const App = () => {
       });
     }
     return results;
-  }, [yearlyGrowth, ebitdaMargin]);
+  }, [yearlyGrowth, ebitdaMargin, ENTRY_DEBT, INTEREST_RATE, TAX_RATE, WACC, TERM, MIN_CASH]);
 
   const finalCash = forecastData.length > 0 ? forecastData[forecastData.length - 1].cashBalance : 0;
   const finalDebt = forecastData.length > 0 ? forecastData[forecastData.length - 1].debtBalance : 0;
@@ -210,6 +210,10 @@ const App = () => {
                     </td>
                     {forecastData.map((d) => <td key={d.year} className="px-2 text-right text-blue-300">{f(d.cashBalance)}</td>)}
                   </tr>
+                  <tr className="text-slate-400 text-xs italic hover:bg-slate-800/20">
+                    <td className="py-3 pl-4">Discount Factor</td>
+                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right">{d.discountFactor.toFixed(4)}</td>)}
+                  </tr>
                   <tr className="text-xs text-slate-500">
                     <td className="py-3 uppercase font-bold">Debt Balance</td>
                     {forecastData.map(d => <td key={d.year} className="px-2 text-right font-bold text-slate-300">{f(d.debtBalance)}</td>)}
@@ -232,7 +236,7 @@ const App = () => {
             {/* Controls */}
             <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-6">
-                <Settings2 className="w-5 h-5 text-blue-400" />
+                <LayoutDashboard className="w-5 h-5 text-blue-400" />
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">Dynamic Controls</h3>
               </div>
               <div className="space-y-8">
@@ -250,7 +254,7 @@ const App = () => {
                   />
                 </div>
 
-                {/* EBITDA Margin - Restored */}
+                {/* EBITDA Margin */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">EBITDA Margin %</label>
@@ -283,7 +287,7 @@ const App = () => {
             {/* Sensitivity Matrix */}
             <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
-                <Grid className="w-5 h-5 text-slate-400" />
+                <TrendingUp className="w-5 h-5 text-slate-400" />
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">IRR & Proceeds Sensitivity</h3>
               </div>
               <div className="border border-slate-700 rounded overflow-hidden">
