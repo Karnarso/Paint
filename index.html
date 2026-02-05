@@ -8,39 +8,38 @@ import {
   Lock
 } from 'lucide-react';
 
+// Move static constants outside to prevent re-creation on render
+const ENTRY_MULTIPLE = 6.0;
+const BASE_EBITDA = 50.0;
+const ENTRY_PRICE = BASE_EBITDA * ENTRY_MULTIPLE; // 300.0M
+const ENTRY_DEBT = 200.0;
+const ENTRY_EQUITY = ENTRY_PRICE - ENTRY_DEBT; // 100.0M
+const INTEREST_RATE = 0.13;
+const TAX_RATE = 0.21;
+const WACC = 0.12;
+const TERM = 5;
+const MIN_CASH = 20.0;
+
 const App = () => {
   // --- Interactive States ---
   const [targetMultiple, setTargetMultiple] = useState(6.0);
-  const [yearlyGrowth, setYearlyGrowth] = useState(5.0); // as percentage
-  const [ebitdaMargin, setEbitdaMargin] = useState(8.0); // EBITDA Margin %
-
-  // --- Fixed LBO Base Data ---
-  const entryMultiple = 6.0; 
-  const baseEbitda = 50.0;   // 2025 EBITDA Basis
-  const entryPrice = baseEbitda * entryMultiple; // 300.0M Total
-  const entryDebt = 200.0;   // Fixed Debt
-  const entryEquity = entryPrice - entryDebt; // 100.0M Equity Plug
-  
-  const interestRate = 0.13;
-  const taxRate = 0.21;
-  const wacc = 0.12; 
-  const term = 5;
-  const minOperatingCash = 20.0; // Minimum cash buffer
+  const [yearlyGrowth, setYearlyGrowth] = useState(5.0); // %
+  const [ebitdaMargin, setEbitdaMargin] = useState(8.0); // %
 
   // --- Dynamic Forecast Calculation: 2026 - 2030 ---
   const forecastData = useMemo(() => {
     const results = [];
-    let startRev = 683.6; // Base 2026 Revenue projection
-    let currentDebt = entryDebt;
+    let startRev = 683.6; // Base 2026 Revenue
+    let currentDebt = ENTRY_DEBT;
     let cashReserve = 0; 
     const growthDecimal = yearlyGrowth / 100;
     const marginDecimal = ebitdaMargin / 100; 
     
-    // Fixed assumptions based on historical data
+    // Fixed assumptions
     const gpMargin = 0.40; 
     const deprMargin = 6.8 / 683.6;
 
-    for (let i = 0; i < term; i++) {
+    for (let i = 0; i < TERM; i++) {
       const year = 2026 + i;
       const rev = i === 0 ? startRev : startRev * Math.pow(1 + growthDecimal, i);
       
@@ -49,21 +48,21 @@ const App = () => {
       const depr = rev * deprMargin;
       const ebit = ebitda - depr;
       
-      // Interest logic: 
-      // Years 1-2 (2026-2027): 0% interest, 0 payments (Holiday)
-      // Years 3-5 (2028-2030): 13% interest on beginning balance
-      const interestExpense = year < 2028 ? 0 : currentDebt * interestRate;
+      // Interest Logic: Holiday (0%) for first 2 years, 13% after
+      const interestExpense = year < 2028 ? 0 : currentDebt * INTEREST_RATE;
       
       const ebt = ebit - interestExpense;
-      const taxes = Math.max(0, ebt * taxRate);
+      const taxes = Math.max(0, ebt * TAX_RATE);
       const netIncome = ebt - taxes;
       
       let debtRepayment = 0;
 
       if (year >= 2028) {
-        // --- Cash Sweep Phase (Years 3-5) ---
+        // Cash Sweep Phase (Years 3-5)
         const totalAvailableCash = netIncome + cashReserve;
-        const effectiveBuffer = (year === 2030) ? 0 : minOperatingCash;
+        // Release buffer only in final year (2030)
+        const effectiveBuffer = (year === 2030) ? 0 : MIN_CASH;
+        
         const maxRepaymentPossible = Math.max(0, totalAvailableCash - effectiveBuffer);
         const actualPrincipalPaid = Math.min(currentDebt, maxRepaymentPossible);
         
@@ -71,7 +70,7 @@ const App = () => {
         currentDebt -= actualPrincipalPaid;
         cashReserve = totalAvailableCash - actualPrincipalPaid;
       } else {
-        // --- Grace Period Phase (Years 1-2) ---
+        // Grace Period (Years 1-2): Accumulate cash
         debtRepayment = 0;
         cashReserve += netIncome;
       }
@@ -90,34 +89,32 @@ const App = () => {
         debtBalance: currentDebt,
         excessCash: year < 2028 ? netIncome : (netIncome - debtRepayment),
         cashBalance: cashReserve,
-        discountFactor: Math.pow(1 + wacc, -(i + 1))
+        discountFactor: Math.pow(1 + WACC, -(i + 1))
       });
     }
     return results;
-  }, [entryDebt, interestRate, yearlyGrowth, ebitdaMargin, minOperatingCash, term, taxRate, wacc]);
+  }, [yearlyGrowth, ebitdaMargin]);
 
   const finalCash = forecastData.length > 0 ? forecastData[forecastData.length - 1].cashBalance : 0;
   const finalDebt = forecastData.length > 0 ? forecastData[forecastData.length - 1].debtBalance : 0;
   const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
 
-  // Helper to calculate returns for any scenario
+  // Calculation Helper
   const getReturns = (ebitdaVal, multipleVal) => {
     const exitEV = ebitdaVal * multipleVal;
     const exitProceeds = exitEV - finalDebt + finalCash;
     
-    // Safety check for negative proceeds to prevent NaN
     let irr = 0;
     if (exitProceeds > 0) {
-      irr = (Math.pow(exitProceeds / entryEquity, 1/term) - 1) * 100;
+      irr = (Math.pow(exitProceeds / ENTRY_EQUITY, 1/TERM) - 1) * 100;
     } else {
-      irr = -100; // Total loss
+      irr = -100; 
     }
     
-    const moic = exitProceeds / entryEquity;
-    return { irr, moic, exitProceeds };
+    return { irr, exitProceeds };
   };
 
-  // Base Case for Top Cards
+  // Base Returns
   const baseReturns = getReturns(exitYearEbitda, targetMultiple);
 
   // Sensitivity Data
@@ -128,6 +125,7 @@ const App = () => {
     { label: 'Upside', value: exitYearEbitda * 1.05 }
   ];
 
+  // Formatter
   const f = (val) => val ? val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0.0';
 
   return (
@@ -143,9 +141,9 @@ const App = () => {
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">LBO Return Analysis / Liquidity Buffer Model</p>
         </div>
         <div className="text-right font-mono text-sm space-y-1 text-slate-400">
-          <p>Purchase Price: <span className="text-white font-bold">{entryPrice.toFixed(1)}M ISK</span></p>
-          <p>Equity: <span className="text-white font-bold">{entryEquity.toFixed(1)}M ISK</span></p>
-          <p>Acquisition Debt: <span className="text-white font-bold">{entryDebt.toFixed(1)}M ISK</span></p>
+          <p>Purchase Price: <span className="text-white font-bold">{ENTRY_PRICE.toFixed(1)}M ISK</span></p>
+          <p>Equity: <span className="text-white font-bold">{ENTRY_EQUITY.toFixed(1)}M ISK</span></p>
+          <p>Acquisition Debt: <span className="text-white font-bold">{ENTRY_DEBT.toFixed(1)}M ISK</span></p>
         </div>
       </div>
 
@@ -154,7 +152,7 @@ const App = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
           <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg">
             <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Entry Multiple</p>
-            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{entryMultiple.toFixed(1)}x</h2>
+            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{ENTRY_MULTIPLE.toFixed(1)}x</h2>
           </div>
           <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg ring-1 ring-blue-500/30">
             <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Projected IRR</p>
@@ -208,7 +206,7 @@ const App = () => {
                   </tr>
                   <tr className="border-y border-blue-500/30 bg-blue-500/10 font-black">
                     <td className="py-3 text-blue-400 flex items-center gap-2">
-                      End Cash Balance {forecastData.some(d => d.year !== '2030' && Math.abs(d.cashBalance - minOperatingCash) < 0.1) && <Lock className="w-3 h-3 text-blue-400" />}
+                      End Cash Balance {forecastData.some(d => d.year !== '2030' && Math.abs(d.cashBalance - MIN_CASH) < 0.1) && <Lock className="w-3 h-3 text-blue-400" />}
                     </td>
                     {forecastData.map((d) => <td key={d.year} className="px-2 text-right text-blue-300">{f(d.cashBalance)}</td>)}
                   </tr>
@@ -222,7 +220,7 @@ const App = () => {
             <div className="mt-4 p-3 border border-blue-900/30 bg-blue-900/10 rounded flex items-center gap-3">
               <div className="p-1.5 bg-blue-500/20 rounded-full"><Calculator className="w-3 h-3 text-blue-400" /></div>
               <p className="text-[10px] text-slate-400 leading-tight">
-                A minimum <span className="text-white font-bold">20M ISK</span> operating cash buffer is maintained through 2029. 
+                A minimum <span className="text-white font-bold">{MIN_CASH}M ISK</span> operating cash buffer is maintained through 2029. 
                 Full sweep is executed in 2030 to maximize final debt retirement.
               </p>
             </div>
@@ -252,7 +250,7 @@ const App = () => {
                   />
                 </div>
 
-                {/* EBITDA Margin */}
+                {/* EBITDA Margin - Restored */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">EBITDA Margin %</label>
