@@ -1,9 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Calculator, 
-  Wallet, 
-  Landmark, 
-  TrendingUp, 
   Grid, 
   BarChart3, 
   ShieldCheck,
@@ -116,7 +113,8 @@ const App = () => {
     return forecastData[forecastData.length - 1].cashBalance;
   }, [forecastData]);
 
-  const calculateReturns = (ebitda, multiple) => {
+  // Wrapped in useCallback to prevent dependency issues
+  const calculateReturns = useCallback((ebitda, multiple) => {
     if (forecastData.length === 0) return { irr: 0, moic: 0, exitProceeds: 0 };
     
     const exitEV = ebitda * multiple;
@@ -124,19 +122,18 @@ const App = () => {
     const exitProceeds = exitEV - finalDebt + finalCash;
     
     // IRR over the term (5 years)
-    // Formula: (ExitEquity / EntryEquity)^(1/years) - 1
     const irr = (Math.pow(exitProceeds / entryEquity, 1/term) - 1) * 100;
     const moic = exitProceeds / entryEquity;
     
     return { irr, moic, exitProceeds };
-  };
+  }, [forecastData, finalCash, entryEquity, term]);
 
   const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
   
   // Calculate base case returns for top cards
   const baseReturns = useMemo(() => 
     calculateReturns(exitYearEbitda, targetMultiple), 
-    [exitYearEbitda, targetMultiple, finalCash, forecastData, entryEquity, term] // eslint-disable-line react-hooks/exhaustive-deps
+    [exitYearEbitda, targetMultiple, calculateReturns]
   );
 
   // Data for Sensitivity Matrix
