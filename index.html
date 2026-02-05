@@ -1,0 +1,348 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Calculator, 
+  Wallet, 
+  Landmark, 
+  TrendingUp, 
+  Grid, 
+  BarChart3, 
+  ShieldCheck,
+  Settings2,
+  Lock
+} from 'lucide-react';
+
+const App = () => {
+  // --- Interactive States ---
+  const [targetMultiple, setTargetMultiple] = useState(6.0);
+  const [yearlyGrowth, setYearlyGrowth] = useState(5.0); // as percentage
+  const [ebitdaMargin, setEbitdaMargin] = useState(8.0); // EBITDA Margin %
+
+  // --- Fixed LBO Base Data ---
+  const entryMultiple = 6.0; 
+  const baseEbitda = 50.0;   // 2025 EBITDA Basis
+  const entryPrice = baseEbitda * entryMultiple; // 300.0M Total
+  const entryDebt = 200.0;   // Fixed Debt
+  const entryEquity = entryPrice - entryDebt; // 100.0M Equity Plug
+  
+  const interestRate = 0.13;
+  const taxRate = 0.21;
+  const wacc = 0.12; 
+  const term = 5;
+  const minOperatingCash = 20.0; // Minimum cash buffer to keep in the company
+
+  // --- Dynamic Forecast Calculation: 2026 - 2030 ---
+  const forecastData = useMemo(() => {
+    const results = [];
+    let startRev = 683.6; // Base 2026 Revenue projection
+    let currentDebt = entryDebt;
+    let cashReserve = 0; 
+    const growthDecimal = yearlyGrowth / 100;
+    const marginDecimal = ebitdaMargin / 100; 
+    
+    // Fixed assumptions based on historical data
+    const gpMargin = 0.40; 
+    const deprMargin = 6.8 / 683.6;
+
+    for (let i = 0; i < term; i++) {
+      const year = 2026 + i;
+      const rev = i === 0 ? startRev : startRev * Math.pow(1 + growthDecimal, i);
+      
+      const gp = rev * gpMargin;
+      const ebitda = rev * marginDecimal;
+      const depr = rev * deprMargin;
+      const ebit = ebitda - depr;
+      
+      // Interest logic: 
+      // Years 1-2 (2026-2027): 0% interest, 0 payments (Holiday)
+      // Years 3-5 (2028-2030): 13% interest on beginning balance
+      const interestExpense = year < 2028 ? 0 : currentDebt * interestRate;
+      
+      const ebt = ebit - interestExpense;
+      const taxes = Math.max(0, ebt * taxRate);
+      const netIncome = ebt - taxes;
+      
+      let debtRepayment = 0;
+
+      if (year >= 2028) {
+        // --- Cash Sweep Phase (Years 3-5) ---
+        // Available cash = Current Net Income + Accumulated Cash from previous years
+        const totalAvailableCash = netIncome + cashReserve;
+        
+        // Liquidity Buffer Logic:
+        // In 2030 (Exit Year), we release the buffer to pay down max debt.
+        // In 2028-2029, we must keep 'minOperatingCash' on the balance sheet.
+        const effectiveBuffer = (year === 2030) ? 0 : minOperatingCash;
+        
+        // Calculate max possible repayment while preserving buffer
+        const maxRepaymentPossible = Math.max(0, totalAvailableCash - effectiveBuffer);
+        
+        // Don't pay more than the debt we owe
+        const actualPrincipalPaid = Math.min(currentDebt, maxRepaymentPossible);
+        
+        debtRepayment = actualPrincipalPaid;
+        currentDebt -= actualPrincipalPaid;
+        
+        // Update cash reserve: Whatever is left after paying debt
+        cashReserve = totalAvailableCash - actualPrincipalPaid;
+      } else {
+        // --- Grace Period Phase (Years 1-2) ---
+        // No payments. All Net Income is added to Cash Reserve.
+        debtRepayment = 0;
+        cashReserve += netIncome;
+      }
+
+      results.push({
+        year: year.toString(),
+        revenue: rev,
+        gp: gp,
+        ebitda: ebitda,
+        depr: depr,
+        ebit: ebit,
+        interest: interestExpense,
+        taxes: taxes,
+        netIncome: netIncome,
+        principal: debtRepayment,
+        debtBalance: currentDebt,
+        excessCash: year < 2028 ? netIncome : (netIncome - debtRepayment), // Flow for that specific year
+        cashBalance: cashReserve,
+        discountFactor: Math.pow(1 + wacc, -(i + 1))
+      });
+    }
+    return results;
+  }, [entryDebt, interestRate, yearlyGrowth, ebitdaMargin, minOperatingCash, term, taxRate, wacc]);
+
+  const finalCash = useMemo(() => {
+    if (forecastData.length === 0) return 0;
+    return forecastData[forecastData.length - 1].cashBalance;
+  }, [forecastData]);
+
+  const calculateReturns = (ebitda, multiple) => {
+    if (forecastData.length === 0) return { irr: 0, moic: 0, exitProceeds: 0 };
+    
+    const exitEV = ebitda * multiple;
+    const finalDebt = forecastData[forecastData.length - 1].debtBalance;
+    const exitProceeds = exitEV - finalDebt + finalCash;
+    
+    // IRR over the term (5 years)
+    // Formula: (ExitEquity / EntryEquity)^(1/years) - 1
+    const irr = (Math.pow(exitProceeds / entryEquity, 1/term) - 1) * 100;
+    const moic = exitProceeds / entryEquity;
+    
+    return { irr, moic, exitProceeds };
+  };
+
+  const exitYearEbitda = forecastData.length > 0 ? forecastData[forecastData.length - 1].ebitda : 0;
+  
+  // Calculate base case returns for top cards
+  const baseReturns = useMemo(() => 
+    calculateReturns(exitYearEbitda, targetMultiple), 
+    [exitYearEbitda, targetMultiple, finalCash, forecastData, entryEquity, term] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Data for Sensitivity Matrix
+  const multiples = [targetMultiple - 1, targetMultiple, targetMultiple + 1];
+  const ebitdaVariations = [
+    { label: 'Downside', value: exitYearEbitda * 0.95 },
+    { label: 'Selected Case', value: exitYearEbitda },
+    { label: 'Upside', value: exitYearEbitda * 1.05 }
+  ];
+
+  const f = (val) => val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  return (
+    <div className="min-h-screen bg-[#020617] p-4 lg:p-10 font-sans text-slate-100">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto mb-8 border-b border-slate-700 pb-6 flex flex-col md:flex-row justify-between items-end gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-5 h-5 text-blue-400" />
+            <span className="text-sm font-black uppercase tracking-[0.3em] text-blue-400">Investment Memo</span>
+          </div>
+          <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-50">Málningavörur ehf.</h1>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">LBO Return Analysis / Liquidity Buffer Model</p>
+        </div>
+        <div className="text-right font-mono text-sm space-y-1 text-slate-400">
+          <p>Purchase Price: <span className="text-white font-bold">{entryPrice.toFixed(1)}M ISK</span></p>
+          <p>Equity: <span className="text-white font-bold">{entryEquity.toFixed(1)}M ISK</span></p>
+          <p>Acquisition Debt: <span className="text-white font-bold">{entryDebt.toFixed(1)}M ISK</span></p>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto">
+        {/* Top KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg">
+            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Entry Multiple</p>
+            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{entryMultiple.toFixed(1)}x</h2>
+          </div>
+          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg ring-1 ring-blue-500/30">
+            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Projected IRR</p>
+            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{baseReturns.irr.toFixed(1)}%</h2>
+          </div>
+          <div className="bg-slate-800/40 border border-slate-700 p-8 rounded shadow-lg">
+            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Exit Proceeds</p>
+            <h2 className="text-6xl font-black font-mono tracking-tighter text-blue-400">{f(baseReturns.exitProceeds)}M</h2>
+          </div>
+        </div>
+
+        {/* Side-by-Side Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          
+          {/* Condensed P&L Statement */}
+          <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
+            <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
+              <BarChart3 className="w-5 h-5 text-slate-400" />
+              <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">P&L and Liquidity Tracker</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse font-mono">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="py-3 font-black text-slate-400 uppercase text-xs">Period</th>
+                    {forecastData.map(d => (
+                      <th key={d.year} className="px-2 py-3 font-black text-white text-right">{d.year}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  <tr className="text-white hover:bg-slate-800/20">
+                    <td className="py-3 font-bold">Revenue</td>
+                    {forecastData.map(d => <td key={d.year} className="px-2 text-right">{f(d.revenue)}</td>)}
+                  </tr>
+                  <tr className="font-bold bg-slate-800/40">
+                    <td className="py-3 text-blue-300">EBITDA</td>
+                    {forecastData.map(d => <td key={d.year} className="px-2 text-right">{f(d.ebitda)}</td>)}
+                  </tr>
+                  <tr className="text-red-400/90 italic hover:bg-slate-800/20">
+                    <td className="py-3 pl-4">Interest</td>
+                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right">{d.interest > 0 ? `(${f(d.interest)})` : '-'}</td>)}
+                  </tr>
+                  <tr className="border-t border-slate-700 font-bold bg-slate-800/50">
+                    <td className="py-3">Net Income</td>
+                    {forecastData.map(d => <td key={d.year} className="px-2 text-right text-white">{f(d.netIncome)}</td>)}
+                  </tr>
+                  <tr className="text-indigo-400 hover:bg-slate-800/20">
+                    <td className="py-3 pl-4 font-bold italic">Debt Repayment</td>
+                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right font-bold">{d.principal > 0 ? `(${f(d.principal)})` : '-'}</td>)}
+                  </tr>
+                  <tr className="border-y border-blue-500/30 bg-blue-500/10 font-black">
+                    <td className="py-3 text-blue-400 flex items-center gap-2">
+                      End Cash Balance {forecastData.some(d => d.year !== '2030' && Math.abs(d.cashBalance - minOperatingCash) < 0.1) && <Lock className="w-3 h-3 text-blue-400" />}
+                    </td>
+                    {forecastData.map((d) => <td key={d.year} className="px-2 text-right text-blue-300">{f(d.cashBalance)}</td>)}
+                  </tr>
+                  <tr className="text-xs text-slate-500">
+                    <td className="py-3 uppercase font-bold">Debt Balance</td>
+                    {forecastData.map(d => <td key={d.year} className="px-2 text-right font-bold text-slate-300">{f(d.debtBalance)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 p-3 border border-blue-900/30 bg-blue-900/10 rounded flex items-center gap-3">
+              <div className="p-1.5 bg-blue-500/20 rounded-full"><Calculator className="w-3 h-3 text-blue-400" /></div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                A minimum <span className="text-white font-bold">20M ISK</span> operating cash buffer is maintained through 2029. 
+                Full sweep is executed in 2030 to maximize final debt retirement.
+              </p>
+            </div>
+          </div>
+
+          {/* Analytics Column */}
+          <div className="space-y-6">
+            
+            {/* Controls */}
+            <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-6">
+                <Settings2 className="w-5 h-5 text-blue-400" />
+                <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">Dynamic Controls</h3>
+              </div>
+              <div className="space-y-8">
+                {/* Revenue Growth */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Revenue Growth Rate</label>
+                    <span className="text-sm font-mono font-bold text-blue-400">{yearlyGrowth.toFixed(1)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0" max="15" step="0.5" 
+                    value={yearlyGrowth} 
+                    onChange={(e) => setYearlyGrowth(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+
+                {/* EBITDA Margin */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">EBITDA Margin %</label>
+                    <span className="text-sm font-mono font-bold text-blue-400">{ebitdaMargin.toFixed(1)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0" max="20" step="0.5" 
+                    value={ebitdaMargin} 
+                    onChange={(e) => setEbitdaMargin(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+
+                {/* Exit Multiple */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Exit Multiple (2030)</label>
+                    <span className="text-sm font-mono font-bold text-blue-400">{targetMultiple.toFixed(1)}x</span>
+                  </div>
+                  <input 
+                    type="range" min="3" max="9" step="0.1" 
+                    value={targetMultiple} 
+                    onChange={(e) => setTargetMultiple(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sensitivity Matrix */}
+            <div className="bg-slate-800/30 border border-slate-700 rounded p-6 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-slate-700 pb-3 mb-4">
+                <Grid className="w-5 h-5 text-slate-400" />
+                <h3 className="font-black text-xs uppercase tracking-widest text-slate-300">IRR & Proceeds Sensitivity</h3>
+              </div>
+              <div className="border border-slate-700 rounded overflow-hidden">
+                <table className="w-full text-center font-mono text-base">
+                  <thead>
+                    <tr className="bg-slate-700/50 border-b border-slate-700 text-xs">
+                      <th className="p-5 border-r border-slate-700 font-black text-slate-500 uppercase text-left">EBITDA Case</th>
+                      {multiples.map(m => <th key={m} className="p-5 font-black text-white">{m.toFixed(1)}x</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {ebitdaVariations.map((variant, idx) => (
+                      <tr key={idx}>
+                        <td className="p-5 border-r border-slate-700 bg-slate-800/40 text-left">
+                          <div className="font-black text-slate-300 uppercase text-xs">{variant.label}</div>
+                        </td>
+                        {multiples.map(m => {
+                          const res = calculateReturns(variant.value, m);
+                          const isSelected = m === targetMultiple && variant.label === 'Selected Case';
+                          return (
+                            <td key={m} className={`p-5 transition-all ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
+                              <div className="font-black text-lg">{res.irr.toFixed(1)}%</div>
+                              <div className="text-[10px] opacity-90 font-bold mt-1.5">{f(res.exitProceeds)} ISK</div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
